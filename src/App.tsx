@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import AshaLogin from './pages/AshaLogin';
 import AshaDashboard from './pages/AshaDashboard';
 import CitizenDashboard from './pages/CitizenDashboard';
+import CitizenLogin from './components/citizen/CitizenLogin';
 import AboutUs from './pages/AboutUs';
 import Services from './pages/Services';
 import Contact from './pages/Contact';
@@ -21,6 +22,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/asha-login" element={<AshaLogin />} />
             <Route path="/asha-dashboard" element={<AshaDashboard />} />
+            <Route path="/citizen-login" element={<CitizenLogin />} />
             <Route path="/citizen" element={<CitizenDashboard />} />
             <Route path="/about" element={<AboutUs />} />
             <Route path="/services" element={<Services />} />

@@ -31,7 +31,7 @@ const CTA = () => {
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
           <Link
-            to="/citizen"
+            to="/citizen-login"
             className="group inline-flex items-center px-8 py-4 bg-white text-blue-700 rounded-xl font-semibold hover:bg-gray-100 transform hover:scale-105 transition-all duration-300 shadow-xl"
           >
             <Smartphone className="h-5 w-5 mr-3" />

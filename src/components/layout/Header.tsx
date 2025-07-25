@@ -48,7 +48,7 @@ const Header = () => {
           {/* Action Buttons */}
           <div className="hidden md:flex items-center space-x-4">
             <Link
-              to="/citizen"
+              to="/citizen-login"
               className="inline-flex items-center px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors duration-200"
             >
               <User className="h-4 w-4 mr-2" />
@@ -92,7 +92,7 @@ const Header = () => {
               ))}
               <div className="pt-4 space-y-2">
                 <Link
-                  to="/citizen"
+                  to="/citizen-login"
                   className="block w-full text-center px-3 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50"
                   onClick={() => setIsMenuOpen(false)}
                 >

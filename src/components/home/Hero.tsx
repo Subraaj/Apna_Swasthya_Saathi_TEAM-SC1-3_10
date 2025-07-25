@@ -49,7 +49,7 @@ const Hero = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                to="/citizen"
+                to="/citizen-login"
                 className="inline-flex items-center px-8 py-4 bg-white text-blue-900 rounded-xl font-semibold hover:bg-gray-100 transform hover:scale-105 transition-all duration-200 shadow-xl"
               >
                 <Users className="h-5 w-5 mr-3" />
