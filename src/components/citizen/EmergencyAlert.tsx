@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Phone, MapPin, User, Clock, Heart } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { emergencyService } from '../../services/emergencyService';
 
 const EmergencyAlert = () => {
   const [isEmergencyActive, setIsEmergencyActive] = useState(false);
@@ -21,14 +22,36 @@ const EmergencyAlert = () => {
   ];
 
   const handleEmergencyAlert = (type: string) => {
-    setSelectedEmergency(type);
-    setIsEmergencyActive(true);
-    toast.success('Emergency alert sent! Help is on the way.');
-    
-    // Simulate emergency response
-    setTimeout(() => {
-      toast.success('Your ASHA worker has been notified and is responding.');
-    }, 3000);
+    const createAlert = async () => {
+      try {
+        const alertId = await emergencyService.createAlert({
+          alert_type: type,
+          severity: 'high',
+          description: `Emergency alert for ${emergencyTypes.find(e => e.id === type)?.name}`,
+          location: {
+            latitude: 0, // Get from geolocation
+            longitude: 0,
+            address: 'Koraput, Odisha'
+          }
+        });
+
+        if (alertId) {
+          setSelectedEmergency(type);
+          setIsEmergencyActive(true);
+          toast.success('Emergency alert sent! Help is on the way.');
+          
+          setTimeout(() => {
+            toast.success('Your ASHA worker has been notified and is responding.');
+          }, 3000);
+        } else {
+          toast.error('Failed to send emergency alert');
+        }
+      } catch (error) {
+        toast.error('Emergency alert failed');
+      }
+    };
+
+    createAlert();
   };
 
   const handleCall = (number: string, name: string) => {

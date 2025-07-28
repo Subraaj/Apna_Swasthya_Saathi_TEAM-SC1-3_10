@@ -1,9 +1,68 @@
 import React, { useState } from 'react';
 import { FileText, Download, Share, Eye, Calendar, User, Stethoscope } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { healthRecordsService } from '../../services/healthRecordsService';
+import type { HealthRecord } from '../../lib/supabase';
 
 const HealthRecords = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
+  const [healthSummary, setHealthSummary] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Load health records on component mount
+  React.useEffect(() => {
+    loadHealthData();
+  }, [selectedCategory]);
+
+  const loadHealthData = async () => {
+    setIsLoading(true);
+    try {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const user = JSON.parse(userData);
+        
+        // Load records with filters
+        const filters = {
+          record_type: selectedCategory,
+          limit: 50
+        };
+        const records = await healthRecordsService.getHealthRecords(user.id, filters);
+        setHealthRecords(records);
+
+        // Load summary
+        const summary = await healthRecordsService.getHealthSummary(user.id);
+        setHealthSummary(summary);
+      }
+    } catch (error) {
+      toast.error('Failed to load health records');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const user = JSON.parse(userData);
+        const exportData = await healthRecordsService.exportHealthRecords(user.id);
+        
+        // Create and download file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `health-records-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        toast.success('Health records exported successfully');
+      }
+    } catch (error) {
+      toast.error('Export failed');
+    }
+  };
 
   const categories = [
     { id: 'all', name: 'All Records' },

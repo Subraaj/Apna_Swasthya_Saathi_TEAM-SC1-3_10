@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Send, Mic, MicOff, Bot, User } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { chatService } from '../../services/chatService';
+import { aiService } from '../../services/aiService';
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState([
@@ -14,6 +16,16 @@ const ChatInterface = () => {
   const [inputValue, setInputValue] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Initialize chat session on component mount
+  React.useEffect(() => {
+    const initSession = async () => {
+      const newSessionId = await chatService.startSession('en', 'health_consultation');
+      setSessionId(newSessionId);
+    };
+    initSession();
+  }, []);
 
   // Simulate AI response using Gemini API
   const getAIResponse = async (userMessage: string) => {
@@ -46,6 +58,11 @@ const ChatInterface = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
+    if (!sessionId) {
+      toast.error('Chat session not initialized');
+      return;
+    }
+
     const userMessage = {
       id: messages.length + 1,
       type: 'user' as const,
@@ -57,17 +74,27 @@ const ChatInterface = () => {
     setInputValue('');
     setIsLoading(true);
 
-    // Get AI response
-    const aiResponse = await getAIResponse(inputValue);
-    
-    const botMessage = {
-      id: messages.length + 2,
-      type: 'bot' as const,
-      content: aiResponse,
-      timestamp: new Date()
-    };
+    try {
+      // Send message through chat service
+      const aiMessage = await chatService.sendMessage(sessionId, inputValue);
+      
+      if (aiMessage) {
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        // Fallback to direct AI service
+        const aiResponse = await getAIResponse(inputValue);
+        const botMessage = {
+          id: messages.length + 2,
+          type: 'bot' as const,
+          content: aiResponse,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+      }
+    } catch (error) {
+      toast.error('Failed to get AI response');
+    }
 
-    setMessages(prev => [...prev, botMessage]);
     setIsLoading(false);
   };
 
