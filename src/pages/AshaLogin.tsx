@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Users, Lock, Mail, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { authService } from '../services/authService';
 
 const AshaLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -16,16 +17,46 @@ const AshaLogin = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate login process
-    setTimeout(() => {
-      if (credentials.email && credentials.password) {
+    try {
+      const result = await authService.login(credentials);
+      
+      if (result.success && result.user) {
+        // Store user data
+        localStorage.setItem('access_token', result.access_token || '');
+        localStorage.setItem('user_data', JSON.stringify(result.user));
+        
         toast.success('Login successful! Welcome to ASHA Dashboard');
         navigate('/asha-dashboard');
       } else {
-        toast.error('Please fill in all fields');
+        toast.error(result.error || 'Login failed');
       }
+    } catch (error) {
+      toast.error('Network error. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setIsLoading(true);
+
+    try {
+      const result = await authService.demoLogin('asha');
+      
+      if (result.success && result.user) {
+        localStorage.setItem('access_token', result.access_token || '');
+        localStorage.setItem('user_data', JSON.stringify(result.user));
+        
+        toast.success('Demo login successful! Welcome to ASHA Dashboard');
+        navigate('/asha-dashboard');
+      } else {
+        toast.error(result.error || 'Demo login failed');
+      }
+    } catch (error) {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -102,27 +133,6 @@ const AshaLogin = () => {
               </div>
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
-                  Forgot password?
-                </a>
-              </div>
-            </div>
-
             {/* Submit Button */}
             <div>
               <button
@@ -141,6 +151,28 @@ const AshaLogin = () => {
               </button>
             </div>
           </form>
+
+          {/* Demo Login */}
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or try demo</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <button
+                onClick={handleDemoLogin}
+                disabled={isLoading}
+                className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Demo Login (asha@demo.com)
+              </button>
+            </div>
+          </div>
 
           {/* Demo Credentials */}
           <div className="mt-6 p-4 bg-blue-50 rounded-xl">

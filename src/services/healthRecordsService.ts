@@ -12,50 +12,87 @@ export interface HealthSummary {
 }
 
 class HealthRecordsService {
+  private getDemoHealthRecords(userId: string): HealthRecord[] {
+    return [
+      {
+        id: '1',
+        citizen_id: userId,
+        asha_id: '550e8400-e29b-41d4-a716-446655440001',
+        record_type: 'ai_diagnosis',
+        diagnosis: {
+          condition: 'anemia',
+          confidence: 0.85,
+          ai_analysis: { hemoglobin_level: 7.2 }
+        },
+        symptoms: ['fatigue', 'weakness', 'pale_skin'],
+        vital_signs: {
+          hemoglobin: 7.2,
+          blood_pressure: '120/80',
+          heart_rate: 85
+        },
+        recommendations: 'Iron supplementation recommended. Follow-up in 2 weeks.',
+        risk_level: 'high',
+        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        id: '2',
+        citizen_id: userId,
+        asha_id: '550e8400-e29b-41d4-a716-446655440001',
+        record_type: 'prescription',
+        diagnosis: {
+          medication: 'Iron + Folic Acid',
+          dosage: '1 tablet daily',
+          duration: '3 months'
+        },
+        symptoms: ['anemia', 'iron_deficiency'],
+        recommendations: 'Take with vitamin C for better absorption.',
+        risk_level: 'medium',
+        created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+      },
+      {
+        id: '3',
+        citizen_id: userId,
+        asha_id: '550e8400-e29b-41d4-a716-446655440001',
+        record_type: 'follow_up',
+        diagnosis: {
+          improvement: 'moderate',
+          hemoglobin: 8.5,
+          compliance: 'good'
+        },
+        symptoms: ['improved_energy', 'less_fatigue'],
+        vital_signs: {
+          hemoglobin: 8.5,
+          blood_pressure: '118/78',
+          heart_rate: 78
+        },
+        recommendations: 'Continue iron supplementation. Next check in 4 weeks.',
+        risk_level: 'low',
+        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    ]
+  }
+
   async getHealthRecords(userId: string, filters?: any): Promise<HealthRecord[]> {
     try {
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-      if (!citizen) return []
-
-      let query = supabase
-        .from('health_records')
-        .select(`
-          *,
-          ai_diagnoses (*)
-        `)
-        .eq('citizen_id', citizen.id)
+      let records = this.getDemoHealthRecords(userId)
 
       if (filters?.record_type && filters.record_type !== 'all') {
-        query = query.eq('record_type', filters.record_type)
+        records = records.filter(r => r.record_type === filters.record_type)
       }
 
       if (filters?.start_date) {
-        query = query.gte('created_at', filters.start_date)
+        records = records.filter(r => new Date(r.created_at) >= new Date(filters.start_date))
       }
 
       if (filters?.end_date) {
-        query = query.lte('created_at', filters.end_date)
+        records = records.filter(r => new Date(r.created_at) <= new Date(filters.end_date))
       }
-
-      query = query.order('created_at', { ascending: false })
 
       if (filters?.limit) {
-        query = query.limit(filters.limit)
+        records = records.slice(0, filters.limit)
       }
 
-      const { data: records, error } = await query
-
-      if (error) {
-        console.error('Health records fetch failed:', error)
-        return []
-      }
-
-      return records || []
+      return records
     } catch (error) {
       console.error('Health records fetch failed:', error)
       return []
@@ -64,80 +101,32 @@ class HealthRecordsService {
 
   async getHealthSummary(userId: string): Promise<HealthSummary | null> {
     try {
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select(`
-          *,
-          users!citizens_user_id_fkey (*)
-        `)
-        .eq('user_id', userId)
-        .single()
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return null
 
-      if (!citizen) return null
-
-      // Get recent records (last 30 days)
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-      const { data: recentRecords } = await supabase
-        .from('health_records')
-        .select('record_type, created_at')
-        .eq('citizen_id', citizen.id)
-        .gte('created_at', thirtyDaysAgo.toISOString())
-
-      // Get latest vital signs
-      const { data: latestVitals } = await supabase
-        .from('health_records')
-        .select('vital_signs, created_at')
-        .eq('citizen_id', citizen.id)
-        .not('vital_signs', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      // Get risk distribution
-      const { data: riskData } = await supabase
-        .from('health_records')
-        .select('risk_level')
-        .eq('citizen_id', citizen.id)
-        .not('risk_level', 'is', null)
-
-      const riskDistribution = riskData?.reduce((acc: any, record) => {
-        acc[record.risk_level] = (acc[record.risk_level] || 0) + 1
-        return acc
-      }, {})
-
-      // Get recent medications
-      const { data: medications } = await supabase
-        .from('health_records')
-        .select('medications, created_at')
-        .eq('citizen_id', citizen.id)
-        .not('medications', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(5)
+      const user = JSON.parse(userData)
+      const records = this.getDemoHealthRecords(userId)
 
       const summary: HealthSummary = {
         patient_info: {
-          name: citizen.users?.full_name,
-          age: this.calculateAge(citizen.date_of_birth),
-          gender: citizen.gender,
-          blood_group: citizen.blood_group,
-          abha_id: citizen.users?.abha_id
+          name: user.full_name,
+          age: this.calculateAge('1985-05-15'),
+          gender: 'Male',
+          blood_group: 'B+',
+          abha_id: user.abha_id
         },
         recent_activity: {
-          records_last_30_days: recentRecords?.length || 0,
-          record_types: this.groupRecordTypes(recentRecords || [])
+          records_last_30_days: records.length,
+          record_types: this.groupRecordTypes(records)
         },
-        latest_vitals: latestVitals?.[0] || null,
+        latest_vitals: records.find(r => r.vital_signs) || null,
         risk_assessment: {
-          distribution: Object.entries(riskDistribution || {}).map(([level, count]) => ({
-            risk_level: level,
-            count
-          })),
-          current_risk: await this.getCurrentRiskLevel(citizen.id)
+          distribution: this.getRiskDistribution(records),
+          current_risk: records[0]?.risk_level || 'unknown'
         },
-        medications: medications || [],
-        health_trends: await this.getHealthTrends(citizen.id),
-        recommendations: this.generateRecommendations(riskDistribution)
+        medications: records.filter(r => r.record_type === 'prescription'),
+        health_trends: this.getHealthTrends(records),
+        recommendations: this.generateRecommendations(records)
       }
 
       return summary
@@ -149,29 +138,19 @@ class HealthRecordsService {
 
   async createHealthRecord(userId: string, recordData: Partial<HealthRecord>): Promise<string | null> {
     try {
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-      if (!citizen) return null
-
-      const { data: record, error } = await supabase
-        .from('health_records')
-        .insert([{
-          citizen_id: citizen.id,
-          ...recordData
-        }])
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Health record creation failed:', error)
-        return null
+      const recordId = crypto.randomUUID()
+      const newRecord = {
+        id: recordId,
+        citizen_id: userId,
+        created_at: new Date().toISOString(),
+        ...recordData
       }
 
-      return record.id
+      const records = JSON.parse(localStorage.getItem('health_records') || '[]')
+      records.push(newRecord)
+      localStorage.setItem('health_records', JSON.stringify(records))
+
+      return recordId
     } catch (error) {
       console.error('Health record creation failed:', error)
       return null
@@ -180,27 +159,16 @@ class HealthRecordsService {
 
   async updateHealthRecord(recordId: string, userId: string, updateData: Partial<HealthRecord>): Promise<boolean> {
     try {
-      // Verify ownership
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
+      const records = JSON.parse(localStorage.getItem('health_records') || '[]')
+      const recordIndex = records.findIndex((r: any) => r.id === recordId && r.citizen_id === userId)
 
-      if (!citizen) return false
-
-      const { error } = await supabase
-        .from('health_records')
-        .update(updateData)
-        .eq('id', recordId)
-        .eq('citizen_id', citizen.id)
-
-      if (error) {
-        console.error('Health record update failed:', error)
-        return false
+      if (recordIndex !== -1) {
+        records[recordIndex] = { ...records[recordIndex], ...updateData }
+        localStorage.setItem('health_records', JSON.stringify(records))
+        return true
       }
 
-      return true
+      return false
     } catch (error) {
       console.error('Health record update failed:', error)
       return false
@@ -252,61 +220,42 @@ class HealthRecordsService {
     }))
   }
 
-  private async getCurrentRiskLevel(citizenId: string): Promise<string> {
-    try {
-      const { data: record } = await supabase
-        .from('health_records')
-        .select('risk_level')
-        .eq('citizen_id', citizenId)
-        .not('risk_level', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+  private getRiskDistribution(records: any[]): any[] {
+    const grouped = records.reduce((acc: any, record) => {
+      if (record.risk_level) {
+        acc[record.risk_level] = (acc[record.risk_level] || 0) + 1
+      }
+      return acc
+    }, {})
 
-      return record?.risk_level || 'unknown'
-    } catch (error) {
-      return 'unknown'
-    }
+    return Object.entries(grouped).map(([level, count]) => ({
+      risk_level: level,
+      count
+    }))
   }
 
-  private async getHealthTrends(citizenId: string): Promise<any[]> {
-    try {
-      // Get trends over last 6 months
-      const sixMonthsAgo = new Date()
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+  private getHealthTrends(records: any[]): any[] {
+    // Group by month for trends
+    const monthlyData = records.reduce((acc: any, record) => {
+      const month = new Date(record.created_at).toISOString().slice(0, 7)
+      if (!acc[month]) {
+        acc[month] = { count: 0, riskScores: [] }
+      }
+      acc[month].count++
+      
+      const riskScore = this.riskLevelToScore(record.risk_level)
+      if (riskScore > 0) acc[month].riskScores.push(riskScore)
+      
+      return acc
+    }, {})
 
-      const { data: records } = await supabase
-        .from('health_records')
-        .select('created_at, risk_level')
-        .eq('citizen_id', citizenId)
-        .gte('created_at', sixMonthsAgo.toISOString())
-
-      // Group by month
-      const monthlyData = records?.reduce((acc: any, record) => {
-        const month = new Date(record.created_at).toISOString().slice(0, 7)
-        if (!acc[month]) {
-          acc[month] = { count: 0, riskScores: [] }
-        }
-        acc[month].count++
-        
-        // Convert risk level to score
-        const riskScore = this.riskLevelToScore(record.risk_level)
-        if (riskScore > 0) acc[month].riskScores.push(riskScore)
-        
-        return acc
-      }, {})
-
-      return Object.entries(monthlyData || {}).map(([month, data]: [string, any]) => ({
-        month,
-        record_count: data.count,
-        avg_risk_score: data.riskScores.length > 0 
-          ? data.riskScores.reduce((a: number, b: number) => a + b, 0) / data.riskScores.length 
-          : 0
-      }))
-    } catch (error) {
-      console.error('Health trends calculation failed:', error)
-      return []
-    }
+    return Object.entries(monthlyData).map(([month, data]: [string, any]) => ({
+      month,
+      record_count: data.count,
+      avg_risk_score: data.riskScores.length > 0 
+        ? data.riskScores.reduce((a: number, b: number) => a + b, 0) / data.riskScores.length 
+        : 0
+    }))
   }
 
   private riskLevelToScore(riskLevel?: string): number {
@@ -319,10 +268,12 @@ class HealthRecordsService {
     }
   }
 
-  private generateRecommendations(riskDistribution?: any): any[] {
+  private generateRecommendations(records: any[]): any[] {
     const recommendations = []
 
-    if (riskDistribution?.high > 0 || riskDistribution?.critical > 0) {
+    const highRiskRecords = records.filter(r => r.risk_level === 'high' || r.risk_level === 'critical')
+
+    if (highRiskRecords.length > 0) {
       recommendations.push({
         type: 'urgent',
         message: 'You have recent high-risk health records. Please consult with your ASHA worker.',

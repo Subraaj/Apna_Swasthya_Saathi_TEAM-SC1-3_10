@@ -11,40 +11,34 @@ export interface CreateAlertData {
 class EmergencyService {
   async createAlert(alertData: CreateAlertData): Promise<string | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return null
 
-      // Get citizen ID
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
+      const user = JSON.parse(userData)
+      const alertId = crypto.randomUUID()
 
-      if (!citizen) return null
-
-      const { data: alert, error } = await supabase
-        .from('emergency_alerts')
-        .insert([{
-          citizen_id: citizen.id,
-          alert_type: alertData.alert_type,
-          severity: alertData.severity,
-          description: alertData.description,
-          location: alertData.location,
-          status: 'active'
-        }])
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Emergency alert creation failed:', error)
-        return null
+      const alert = {
+        id: alertId,
+        citizen_id: user.id,
+        alert_type: alertData.alert_type,
+        severity: alertData.severity,
+        description: alertData.description,
+        location: alertData.location,
+        status: 'active',
+        created_at: new Date().toISOString()
       }
 
-      // Notify nearby ASHA workers
-      await this.notifyNearbyAshaWorkers(alert.id, user.id)
+      // Save to localStorage
+      const alerts = JSON.parse(localStorage.getItem('emergency_alerts') || '[]')
+      alerts.push(alert)
+      localStorage.setItem('emergency_alerts', JSON.stringify(alerts))
 
-      return alert.id
+      // Simulate ASHA notification
+      setTimeout(() => {
+        console.log('ASHA workers notified about emergency alert:', alertId)
+      }, 1000)
+
+      return alertId
     } catch (error) {
       console.error('Emergency alert creation failed:', error)
       return null
@@ -53,33 +47,8 @@ class EmergencyService {
 
   async getUserAlerts(userId: string): Promise<EmergencyAlert[]> {
     try {
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-      if (!citizen) return []
-
-      const { data: alerts, error } = await supabase
-        .from('emergency_alerts')
-        .select(`
-          *,
-          asha_workers!emergency_alerts_responder_id_fkey (
-            asha_id,
-            users!asha_workers_user_id_fkey (full_name)
-          )
-        `)
-        .eq('citizen_id', citizen.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      if (error) {
-        console.error('User alerts fetch failed:', error)
-        return []
-      }
-
-      return alerts || []
+      const alerts = JSON.parse(localStorage.getItem('emergency_alerts') || '[]')
+      return alerts.filter((alert: any) => alert.citizen_id === userId)
     } catch (error) {
       console.error('User alerts fetch failed:', error)
       return []
@@ -88,34 +57,17 @@ class EmergencyService {
 
   async respondToAlert(alertId: string, responseMessage?: string): Promise<boolean> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return false
-
-      // Get ASHA worker ID
-      const { data: asha } = await supabase
-        .from('asha_workers')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!asha) return false
-
-      const { error } = await supabase
-        .from('emergency_alerts')
-        .update({
-          responder_id: asha.id,
-          response_time: new Date().toISOString(),
-          status: 'responding'
-        })
-        .eq('id', alertId)
-        .eq('status', 'active')
-
-      if (error) {
-        console.error('Alert response failed:', error)
-        return false
+      const alerts = JSON.parse(localStorage.getItem('emergency_alerts') || '[]')
+      const alertIndex = alerts.findIndex((alert: any) => alert.id === alertId)
+      
+      if (alertIndex !== -1) {
+        alerts[alertIndex].status = 'responding'
+        alerts[alertIndex].response_time = new Date().toISOString()
+        localStorage.setItem('emergency_alerts', JSON.stringify(alerts))
+        return true
       }
-
-      return true
+      
+      return false
     } catch (error) {
       console.error('Alert response failed:', error)
       return false
@@ -124,20 +76,17 @@ class EmergencyService {
 
   async resolveAlert(alertId: string, resolutionNotes?: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('emergency_alerts')
-        .update({
-          status: 'resolved',
-          resolution_time: new Date().toISOString()
-        })
-        .eq('id', alertId)
-
-      if (error) {
-        console.error('Alert resolution failed:', error)
-        return false
+      const alerts = JSON.parse(localStorage.getItem('emergency_alerts') || '[]')
+      const alertIndex = alerts.findIndex((alert: any) => alert.id === alertId)
+      
+      if (alertIndex !== -1) {
+        alerts[alertIndex].status = 'resolved'
+        alerts[alertIndex].resolution_time = new Date().toISOString()
+        localStorage.setItem('emergency_alerts', JSON.stringify(alerts))
+        return true
       }
-
-      return true
+      
+      return false
     } catch (error) {
       console.error('Alert resolution failed:', error)
       return false
@@ -146,70 +95,12 @@ class EmergencyService {
 
   async getAshaAlerts(ashaUserId: string): Promise<EmergencyAlert[]> {
     try {
-      // Get ASHA worker data
-      const { data: asha } = await supabase
-        .from('asha_workers')
-        .select('assigned_villages')
-        .eq('user_id', ashaUserId)
-        .single()
-
-      if (!asha) return []
-
-      // Get alerts in assigned villages
-      const { data: alerts, error } = await supabase
-        .from('emergency_alerts')
-        .select(`
-          *,
-          citizens!emergency_alerts_citizen_id_fkey (
-            users!citizens_user_id_fkey (full_name, phone, village)
-          )
-        `)
-        .in('status', ['active', 'responding'])
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      if (error) {
-        console.error('ASHA alerts fetch failed:', error)
-        return []
-      }
-
-      // Filter by assigned villages
-      const filteredAlerts = alerts?.filter(alert => {
-        const village = alert.citizens?.users?.village
-        return village && asha.assigned_villages.includes(village)
-      })
-
-      return filteredAlerts || []
+      const alerts = JSON.parse(localStorage.getItem('emergency_alerts') || '[]')
+      // For demo, return all active alerts
+      return alerts.filter((alert: any) => alert.status === 'active')
     } catch (error) {
       console.error('ASHA alerts fetch failed:', error)
       return []
-    }
-  }
-
-  private async notifyNearbyAshaWorkers(alertId: string, citizenUserId: string): Promise<void> {
-    try {
-      // Get citizen's village
-      const { data: user } = await supabase
-        .from('users')
-        .select('village')
-        .eq('id', citizenUserId)
-        .single()
-
-      if (!user?.village) return
-
-      // Find ASHA workers in the same village
-      const { data: ashaWorkers } = await supabase
-        .from('asha_workers')
-        .select(`
-          id,
-          users!asha_workers_user_id_fkey (full_name, phone)
-        `)
-        .contains('assigned_villages', [user.village])
-
-      // In a real implementation, send SMS/push notifications here
-      console.log(`Notifying ${ashaWorkers?.length || 0} ASHA workers about emergency alert ${alertId}`)
-    } catch (error) {
-      console.error('ASHA notification failed:', error)
     }
   }
 

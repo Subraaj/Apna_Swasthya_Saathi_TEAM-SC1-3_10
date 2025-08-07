@@ -14,51 +14,42 @@ const EmergencyAlert = () => {
     { id: 'pregnancy', name: 'Pregnancy Emergency', icon: User, color: 'bg-pink-500' },
   ];
 
-  const emergencyContacts = [
-    { name: 'Emergency Ambulance', number: '108', description: 'Free 24/7 ambulance service' },
-    { name: 'ASHA Worker - Priya Patel', number: '+91 9876543210', description: 'Your local health worker' },
-    { name: 'PHC Koraput', number: '+91 9876543211', description: 'Nearest primary health center' },
-    { name: 'District Hospital', number: '+91 9876543212', description: 'Emergency services available' },
-  ];
+  const emergencyContacts = emergencyService.getEmergencyContacts();
 
-  const handleEmergencyAlert = (type: string) => {
-    const createAlert = async () => {
-      try {
-        const alertId = await emergencyService.createAlert({
-          alert_type: type,
-          severity: 'high',
-          description: `Emergency alert for ${emergencyTypes.find(e => e.id === type)?.name}`,
-          location: {
-            latitude: 0, // Get from geolocation
-            longitude: 0,
-            address: 'Koraput, Odisha'
-          }
-        });
-
-        if (alertId) {
-          setSelectedEmergency(type);
-          setIsEmergencyActive(true);
-          toast.success('Emergency alert sent! Help is on the way.');
-          
-          setTimeout(() => {
-            toast.success('Your ASHA worker has been notified and is responding.');
-          }, 3000);
-        } else {
-          toast.error('Failed to send emergency alert');
+  const handleEmergencyAlert = async (type: string) => {
+    try {
+      const alertId = await emergencyService.createAlert({
+        alert_type: type,
+        severity: 'high',
+        description: `Emergency alert for ${emergencyTypes.find(e => e.id === type)?.name}`,
+        location: {
+          latitude: 18.8137,
+          longitude: 82.7119,
+          address: 'Koraput, Odisha'
         }
-      } catch (error) {
-        toast.error('Emergency alert failed');
-      }
-    };
+      });
 
-    createAlert();
+      if (alertId) {
+        setSelectedEmergency(type);
+        setIsEmergencyActive(true);
+        toast.success('Emergency alert sent! Help is on the way.');
+        
+        setTimeout(() => {
+          toast.success('Your ASHA worker has been notified and is responding.');
+        }, 3000);
+      } else {
+        toast.error('Failed to send emergency alert');
+      }
+    } catch (error) {
+      toast.error('Emergency alert failed');
+    }
   };
 
   const handleCall = (number: string, name: string) => {
     toast.success(`Calling ${name} at ${number}...`);
   };
 
-  const cancelEmergency = () => {
+  const cancelEmergency = async () => {
     setIsEmergencyActive(false);
     setSelectedEmergency('');
     toast.success('Emergency alert cancelled.');

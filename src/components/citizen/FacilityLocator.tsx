@@ -2,50 +2,11 @@ import React, { useState } from 'react';
 import { MapPin, Navigation, Phone, Clock, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilityService } from '../../services/facilityService';
-import type { HealthcareFacility } from '../../lib/supabase';
 
 const FacilityLocator = () => {
   const [selectedType, setSelectedType] = useState('all');
   const [searchLocation, setSearchLocation] = useState('');
-  const [facilities, setFacilities] = useState<HealthcareFacility[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Load nearby facilities on component mount
-  React.useEffect(() => {
-    loadNearbyFacilities();
-  }, []);
-
-  const loadNearbyFacilities = async () => {
-    setIsLoading(true);
-    try {
-      const userData = localStorage.getItem('user_data');
-      if (userData) {
-        const user = JSON.parse(userData);
-        const nearbyFacilities = await facilityService.getNearbyFacilities(user.id);
-        setFacilities(nearbyFacilities);
-      }
-    } catch (error) {
-      toast.error('Failed to load facilities');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    setIsLoading(true);
-    try {
-      const searchParams = {
-        type: selectedType,
-        district: searchLocation || undefined
-      };
-      const searchResults = await facilityService.searchFacilities(searchParams);
-      setFacilities(searchResults);
-    } catch (error) {
-      toast.error('Search failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const facilityTypes = [
     { id: 'all', name: 'All Facilities' },

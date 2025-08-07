@@ -79,7 +79,7 @@ class AIService {
         }
       }
 
-      // Save analysis to database
+      // Save analysis to localStorage for demo
       await this.saveAnalysis(data, analysis)
 
       return { success: true, analysis }
@@ -159,50 +159,32 @@ class AIService {
 
   private async saveAnalysis(inputData: SymptomAnalysis, analysis: any): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return
 
-      // Get citizen ID
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!citizen) return
-
-      // Save health record
-      const { data: healthRecord } = await supabase
-        .from('health_records')
-        .insert([{
-          citizen_id: citizen.id,
-          record_type: 'ai_diagnosis',
-          symptoms: inputData.symptoms,
-          vital_signs: inputData.vital_signs,
-          diagnosis: {
-            condition: analysis.condition,
-            confidence: analysis.confidence_score,
-            ai_analysis: analysis
-          },
-          risk_level: analysis.risk_level,
-          recommendations: analysis.recommendations.join('\n')
-        }])
-        .select()
-        .single()
-
-      // Save AI diagnosis details
-      if (healthRecord) {
-        await supabase
-          .from('ai_diagnoses')
-          .insert([{
-            health_record_id: healthRecord.id,
-            model_used: 'gemini_1.5_flash',
-            input_data: inputData,
-            prediction_results: analysis,
-            confidence_score: analysis.confidence_score,
-            processing_time_ms: 1000
-          }])
+      const user = JSON.parse(userData)
+      
+      // Save to localStorage for demo
+      const healthRecords = JSON.parse(localStorage.getItem('health_records') || '[]')
+      
+      const newRecord = {
+        id: crypto.randomUUID(),
+        citizen_id: user.id,
+        record_type: 'ai_diagnosis',
+        symptoms: inputData.symptoms,
+        vital_signs: inputData.vital_signs,
+        diagnosis: {
+          condition: analysis.condition,
+          confidence: analysis.confidence_score,
+          ai_analysis: analysis
+        },
+        risk_level: analysis.risk_level,
+        recommendations: analysis.recommendations.join('\n'),
+        created_at: new Date().toISOString()
       }
+
+      healthRecords.push(newRecord)
+      localStorage.setItem('health_records', JSON.stringify(healthRecords))
     } catch (error) {
       console.error('Failed to save analysis:', error)
     }
@@ -210,25 +192,8 @@ class AIService {
 
   async getDiagnosisHistory(userId: string): Promise<any[]> {
     try {
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-      if (!citizen) return []
-
-      const { data: records } = await supabase
-        .from('health_records')
-        .select(`
-          *,
-          ai_diagnoses (*)
-        `)
-        .eq('citizen_id', citizen.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      return records || []
+      const healthRecords = JSON.parse(localStorage.getItem('health_records') || '[]')
+      return healthRecords.filter((record: any) => record.citizen_id === userId)
     } catch (error) {
       console.error('Failed to get diagnosis history:', error)
       return []

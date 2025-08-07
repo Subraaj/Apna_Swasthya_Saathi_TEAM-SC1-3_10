@@ -28,32 +28,56 @@ export interface AuthResponse {
 class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      // First authenticate with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: credentials.email,
-        password: credentials.password
-      })
-
-      if (authError) {
-        return { success: false, error: authError.message }
+      // For demo purposes, use localStorage-based authentication
+      const demoUsers = {
+        'asha@demo.com': {
+          id: '550e8400-e29b-41d4-a716-446655440001',
+          email: 'asha@demo.com',
+          user_type: 'asha' as const,
+          full_name: 'Priya Patel',
+          phone: '+91 9876543210',
+          district: 'Koraput',
+          block: 'Koraput',
+          village: 'Kendrapara',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        'citizen@demo.com': {
+          id: '550e8400-e29b-41d4-a716-446655440002',
+          email: 'citizen@demo.com',
+          user_type: 'citizen' as const,
+          full_name: 'Ramesh Kumar',
+          phone: '+91 9876543211',
+          abha_id: '12-3456-7890-1234',
+          district: 'Koraput',
+          block: 'Koraput',
+          village: 'Bhadrak',
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
       }
 
-      // Get user profile from our users table
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', credentials.email)
-        .eq('is_active', true)
-        .single()
-
-      if (userError || !userData) {
-        return { success: false, error: 'User profile not found' }
+      const demoPasswords = {
+        'asha@demo.com': 'demo123',
+        'citizen@demo.com': 'demo123'
       }
+
+      const user = demoUsers[credentials.email as keyof typeof demoUsers]
+      const validPassword = demoPasswords[credentials.email as keyof typeof demoPasswords]
+
+      if (!user || credentials.password !== validPassword) {
+        return { success: false, error: 'Invalid credentials' }
+      }
+
+      // Generate mock token
+      const access_token = `demo_token_${user.id}_${Date.now()}`
 
       return {
         success: true,
-        user: userData,
-        access_token: authData.session?.access_token
+        user,
+        access_token
       }
     } catch (error) {
       return { success: false, error: 'Login failed' }
@@ -71,56 +95,26 @@ class AuthService {
 
   async register(data: RegisterData): Promise<AuthResponse> {
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // For demo purposes, just return success
+      const newUser: User = {
+        id: crypto.randomUUID(),
         email: data.email,
-        password: data.password
-      })
-
-      if (authError) {
-        return { success: false, error: authError.message }
-      }
-
-      // Create user profile
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .insert([{
-          id: authData.user?.id,
-          email: data.email,
-          user_type: data.user_type,
-          full_name: data.full_name,
-          phone: data.phone,
-          district: data.district,
-          block: data.block,
-          village: data.village,
-          abha_id: data.abha_id
-        }])
-        .select()
-        .single()
-
-      if (userError) {
-        return { success: false, error: 'Failed to create user profile' }
-      }
-
-      // Create type-specific profile
-      if (data.user_type === 'asha') {
-        await supabase.from('asha_workers').insert([{
-          user_id: userData.id,
-          asha_id: `ASHA${Date.now()}`,
-          training_status: 'pending',
-          performance_score: 0,
-          assigned_villages: data.village ? [data.village] : []
-        }])
-      } else if (data.user_type === 'citizen') {
-        await supabase.from('citizens').insert([{
-          user_id: userData.id
-        }])
+        user_type: data.user_type,
+        full_name: data.full_name,
+        phone: data.phone,
+        district: data.district,
+        block: data.block,
+        village: data.village,
+        abha_id: data.abha_id,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
 
       return {
         success: true,
-        user: userData,
-        access_token: authData.session?.access_token
+        user: newUser,
+        access_token: `demo_token_${newUser.id}_${Date.now()}`
       }
     } catch (error) {
       return { success: false, error: 'Registration failed' }
@@ -128,24 +122,14 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
-    await supabase.auth.signOut()
     localStorage.removeItem('access_token')
     localStorage.removeItem('user_data')
   }
 
   async getCurrentUser(): Promise<User | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) return null
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      return userData
+      const userData = localStorage.getItem('user_data')
+      return userData ? JSON.parse(userData) : null
     } catch (error) {
       return null
     }
@@ -153,9 +137,12 @@ class AuthService {
 
   async refreshToken(): Promise<string | null> {
     try {
-      const { data, error } = await supabase.auth.refreshSession()
-      if (error) return null
-      return data.session?.access_token || null
+      const userData = localStorage.getItem('user_data')
+      if (userData) {
+        const user = JSON.parse(userData)
+        return `demo_token_${user.id}_${Date.now()}`
+      }
+      return null
     } catch (error) {
       return null
     }

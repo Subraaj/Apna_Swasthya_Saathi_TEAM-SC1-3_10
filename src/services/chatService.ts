@@ -21,10 +21,15 @@ export interface ChatSession {
 class ChatService {
   async startSession(language = 'en', sessionType = 'health_consultation'): Promise<string | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return null
+
+      const user = JSON.parse(userData)
+      const sessionId = crypto.randomUUID()
 
       const sessionData = {
+        id: sessionId,
+        user_id: user.id,
         session_type: sessionType,
         language,
         messages: [],
@@ -32,20 +37,16 @@ class ChatService {
           user_symptoms: [],
           current_topic: null,
           assessment_stage: 'initial'
-        }
+        },
+        created_at: new Date().toISOString()
       }
 
-      const { data: session } = await supabase
-        .from('chat_sessions')
-        .insert([{
-          user_id: user.id,
-          session_data: sessionData,
-          language
-        }])
-        .select()
-        .single()
+      // Save to localStorage
+      const sessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]')
+      sessions.push(sessionData)
+      localStorage.setItem('chat_sessions', JSON.stringify(sessions))
 
-      return session?.id || null
+      return sessionId
     } catch (error) {
       console.error('Failed to start chat session:', error)
       return null
@@ -54,20 +55,18 @@ class ChatService {
 
   async sendMessage(sessionId: string, message: string, messageType = 'text'): Promise<ChatMessage | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return null
+
+      const user = JSON.parse(userData)
 
       // Get session
-      const { data: session } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .eq('user_id', user.id)
-        .single()
+      const sessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]')
+      const sessionIndex = sessions.findIndex((s: any) => s.id === sessionId && s.user_id === user.id)
+      
+      if (sessionIndex === -1) return null
 
-      if (!session) return null
-
-      const sessionData = session.session_data
+      const session = sessions[sessionIndex]
       
       // Add user message
       const userMessage: ChatMessage = {
@@ -77,10 +76,10 @@ class ChatService {
         timestamp: new Date().toISOString()
       }
 
-      sessionData.messages.push(userMessage)
+      session.messages.push(userMessage)
 
       // Generate AI response
-      const aiResponse = await this.generateAIResponse(message, sessionData, user.id)
+      const aiResponse = await this.generateAIResponse(message, session, user.id)
       
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
@@ -91,17 +90,13 @@ class ChatService {
         timestamp: new Date().toISOString()
       }
 
-      sessionData.messages.push(assistantMessage)
-      sessionData.context = aiResponse.updated_context || sessionData.context
+      session.messages.push(assistantMessage)
+      session.context = aiResponse.updated_context || session.context
+      session.updated_at = new Date().toISOString()
 
       // Update session
-      await supabase
-        .from('chat_sessions')
-        .update({
-          session_data: sessionData,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sessionId)
+      sessions[sessionIndex] = session
+      localStorage.setItem('chat_sessions', JSON.stringify(sessions))
 
       return assistantMessage
     } catch (error) {
@@ -112,25 +107,13 @@ class ChatService {
 
   async getSession(sessionId: string): Promise<ChatSession | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return null
 
-      const { data: session } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .eq('user_id', user.id)
-        .single()
-
-      if (!session) return null
-
-      return {
-        id: session.id,
-        language: session.language,
-        messages: session.session_data.messages || [],
-        context: session.session_data.context || {},
-        created_at: session.created_at
-      }
+      const user = JSON.parse(userData)
+      const sessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]')
+      
+      return sessions.find((s: any) => s.id === sessionId && s.user_id === user.id) || null
     } catch (error) {
       console.error('Failed to get session:', error)
       return null
@@ -139,23 +122,13 @@ class ChatService {
 
   async getUserSessions(): Promise<ChatSession[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return []
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return []
 
-      const { data: sessions } = await supabase
-        .from('chat_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(50)
-
-      return sessions?.map(session => ({
-        id: session.id,
-        language: session.language,
-        messages: session.session_data.messages || [],
-        context: session.session_data.context || {},
-        created_at: session.created_at
-      })) || []
+      const user = JSON.parse(userData)
+      const sessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]')
+      
+      return sessions.filter((s: any) => s.user_id === user.id)
     } catch (error) {
       console.error('Failed to get user sessions:', error)
       return []
@@ -240,7 +213,7 @@ class ChatService {
         Keep it concise and actionable.
       `
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=AIzaSyA17TYUA-SKvSUhVPh9EtKZWWyPyVQOp08`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${this.geminiApiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

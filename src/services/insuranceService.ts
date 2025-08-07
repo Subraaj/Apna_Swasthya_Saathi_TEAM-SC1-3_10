@@ -97,19 +97,10 @@ class InsuranceService {
 
   async enrollInInsurance(enrollmentData: EnrollmentData): Promise<string | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
+      const userData = localStorage.getItem('user_data')
+      if (!userData) return null
 
-      // Get citizen ID
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!citizen) return null
-
-      // Get product details
+      const user = JSON.parse(userData)
       const product = this.getInsuranceProducts().find(p => p.id === enrollmentData.product_id)
       if (!product) return null
 
@@ -119,31 +110,30 @@ class InsuranceService {
       const endDate = new Date()
       endDate.setMonth(endDate.getMonth() + enrollmentData.coverage_period_months)
 
-      // Generate policy number
+      // Generate policy
+      const policyId = crypto.randomUUID()
       const policyNumber = `ASS${Date.now().toString().slice(-8)}`
 
-      const { data: policy, error } = await supabase
-        .from('insurance_policies')
-        .insert([{
-          citizen_id: citizen.id,
-          policy_type: enrollmentData.product_id,
-          policy_number: policyNumber,
-          premium_amount: totalPremium,
-          coverage_amount: product.coverage_amount,
-          start_date: startDate.toISOString(),
-          end_date: endDate.toISOString(),
-          status: 'active',
-          claims: []
-        }])
-        .select()
-        .single()
-
-      if (error) {
-        console.error('Insurance enrollment failed:', error)
-        return null
+      const policy = {
+        id: policyId,
+        citizen_id: user.id,
+        policy_type: enrollmentData.product_id,
+        policy_number: policyNumber,
+        premium_amount: totalPremium,
+        coverage_amount: product.coverage_amount,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        status: 'active',
+        claims: [],
+        created_at: new Date().toISOString()
       }
 
-      return policy.id
+      // Save to localStorage
+      const policies = JSON.parse(localStorage.getItem('insurance_policies') || '[]')
+      policies.push(policy)
+      localStorage.setItem('insurance_policies', JSON.stringify(policies))
+
+      return policyId
     } catch (error) {
       console.error('Insurance enrollment failed:', error)
       return null
@@ -152,26 +142,8 @@ class InsuranceService {
 
   async getUserPolicies(userId: string): Promise<InsurancePolicy[]> {
     try {
-      const { data: citizen } = await supabase
-        .from('citizens')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-      if (!citizen) return []
-
-      const { data: policies, error } = await supabase
-        .from('insurance_policies')
-        .select('*')
-        .eq('citizen_id', citizen.id)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('User policies fetch failed:', error)
-        return []
-      }
-
-      return policies || []
+      const policies = JSON.parse(localStorage.getItem('insurance_policies') || '[]')
+      return policies.filter((policy: any) => policy.citizen_id === userId)
     } catch (error) {
       console.error('User policies fetch failed:', error)
       return []
@@ -180,53 +152,33 @@ class InsuranceService {
 
   async fileClaim(policyId: string, claimData: any): Promise<boolean> {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return false
+      const policies = JSON.parse(localStorage.getItem('insurance_policies') || '[]')
+      const policyIndex = policies.findIndex((p: any) => p.id === policyId)
 
-      // Get policy
-      const { data: policy } = await supabase
-        .from('insurance_policies')
-        .select(`
-          *,
-          citizens!insurance_policies_citizen_id_fkey (user_id)
-        `)
-        .eq('id', policyId)
-        .single()
+      if (policyIndex !== -1) {
+        const claimId = crypto.randomUUID()
+        const claimNumber = `CLM${Date.now().toString().slice(-8)}`
 
-      if (!policy || policy.citizens?.user_id !== user.id) return false
+        const newClaim = {
+          claim_id: claimId,
+          claim_number: claimNumber,
+          claim_type: claimData.claim_type,
+          claim_amount: claimData.claim_amount,
+          incident_description: claimData.incident_description,
+          incident_date: claimData.incident_date,
+          documents: claimData.documents || [],
+          status: 'submitted',
+          submitted_date: new Date().toISOString(),
+          estimated_processing_days: 7
+        }
 
-      // Create claim
-      const claimId = crypto.randomUUID()
-      const claimNumber = `CLM${Date.now().toString().slice(-8)}`
-
-      const newClaim = {
-        claim_id: claimId,
-        claim_number: claimNumber,
-        claim_type: claimData.claim_type,
-        claim_amount: claimData.claim_amount,
-        incident_description: claimData.incident_description,
-        incident_date: claimData.incident_date,
-        documents: claimData.documents || [],
-        status: 'submitted',
-        submitted_date: new Date().toISOString(),
-        estimated_processing_days: 7
+        policies[policyIndex].claims = policies[policyIndex].claims || []
+        policies[policyIndex].claims.push(newClaim)
+        localStorage.setItem('insurance_policies', JSON.stringify(policies))
+        return true
       }
 
-      // Update policy with new claim
-      const existingClaims = policy.claims || []
-      existingClaims.push(newClaim)
-
-      const { error } = await supabase
-        .from('insurance_policies')
-        .update({ claims: existingClaims })
-        .eq('id', policyId)
-
-      if (error) {
-        console.error('Claim filing failed:', error)
-        return false
-      }
-
-      return true
+      return false
     } catch (error) {
       console.error('Claim filing failed:', error)
       return false

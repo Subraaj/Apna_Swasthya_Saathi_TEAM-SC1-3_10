@@ -7,10 +7,10 @@ import { aiService } from '../../services/aiService';
 const ChatInterface = () => {
   const [messages, setMessages] = useState([
     {
-      id: 1,
-      type: 'bot',
+      id: '1',
+      type: 'assistant' as const,
       content: 'Namaste! I am your AI health assistant. How can I help you today? You can ask me about symptoms, find nearby healthcare facilities, or get guidance on government health schemes.',
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     }
   ]);
   const [inputValue, setInputValue] = useState('');
@@ -58,16 +58,11 @@ const ChatInterface = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    if (!sessionId) {
-      toast.error('Chat session not initialized');
-      return;
-    }
-
     const userMessage = {
-      id: messages.length + 1,
+      id: crypto.randomUUID(),
       type: 'user' as const,
       content: inputValue,
-      timestamp: new Date()
+      timestamp: new Date().toISOString()
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -75,22 +70,17 @@ const ChatInterface = () => {
     setIsLoading(true);
 
     try {
-      // Send message through chat service
-      const aiMessage = await chatService.sendMessage(sessionId, inputValue);
+      // Get AI response
+      const aiResponse = await getAIResponse(inputValue);
       
-      if (aiMessage) {
-        setMessages(prev => [...prev, aiMessage]);
-      } else {
-        // Fallback to direct AI service
-        const aiResponse = await getAIResponse(inputValue);
-        const botMessage = {
-          id: messages.length + 2,
-          type: 'bot' as const,
-          content: aiResponse,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, botMessage]);
-      }
+      const botMessage = {
+        id: crypto.randomUUID(),
+        type: 'assistant' as const,
+        content: aiResponse,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       toast.error('Failed to get AI response');
     }
@@ -188,7 +178,7 @@ const ChatInterface = () => {
                   <p className={`text-xs mt-1 ${
                     message.type === 'user' ? 'text-blue-100' : 'text-gray-500'
                   }`}>
-                    {message.timestamp.toLocaleTimeString()}
+                    {new Date(message.timestamp).toLocaleTimeString()}
                   </p>
                 </div>
               </div>

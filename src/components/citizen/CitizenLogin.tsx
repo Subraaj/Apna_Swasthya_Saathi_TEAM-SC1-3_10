@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, User, Lock, Mail, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { authService } from '../../services/authService';
 
 const CitizenLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -17,25 +18,17 @@ const CitizenLogin = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/v1/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Store token and user data
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
+      const result = await authService.login(credentials);
+      
+      if (result.success && result.user) {
+        // Store user data
+        localStorage.setItem('access_token', result.access_token || '');
+        localStorage.setItem('user_data', JSON.stringify(result.user));
         
         toast.success('Login successful! Welcome to your dashboard');
         navigate('/citizen');
       } else {
-        toast.error(data.error || 'Login failed');
+        toast.error(result.error || 'Login failed');
       }
     } catch (error) {
       toast.error('Network error. Please try again.');
@@ -48,25 +41,16 @@ const CitizenLogin = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/v1/auth/demo-login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ user_type: 'citizen' }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Store token and user data
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
+      const result = await authService.demoLogin('citizen');
+      
+      if (result.success && result.user) {
+        localStorage.setItem('access_token', result.access_token || '');
+        localStorage.setItem('user_data', JSON.stringify(result.user));
         
         toast.success('Demo login successful! Welcome to your dashboard');
         navigate('/citizen');
       } else {
-        toast.error(data.error || 'Demo login failed');
+        toast.error(result.error || 'Demo login failed');
       }
     } catch (error) {
       toast.error('Network error. Please try again.');
@@ -149,27 +133,6 @@ const CitizenLogin = () => {
               </div>
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                  Remember me
-                </label>
-              </div>
-
-              <div className="text-sm">
-                <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
-                  Forgot password?
-                </a>
-              </div>
-            </div>
-
             {/* Submit Button */}
             <div>
               <button
@@ -206,17 +169,24 @@ const CitizenLogin = () => {
                 disabled={isLoading}
                 className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Demo Login (citizen@demo.com)
+                Demo Login (asha@demo.com)
               </button>
             </div>
+          </div>
+
+          {/* Demo Credentials */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-xl">
+            <p className="text-sm text-blue-800 font-medium mb-2">Demo Credentials:</p>
+            <p className="text-xs text-blue-600">Email: asha@demo.com</p>
+            <p className="text-xs text-blue-600">Password: demo123</p>
           </div>
 
           {/* Footer */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
+              New ASHA worker?{' '}
               <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
-                Contact your ASHA worker for registration
+                Contact your supervisor for registration
               </a>
             </p>
           </div>
@@ -236,4 +206,4 @@ const CitizenLogin = () => {
   );
 };
 
-export default CitizenLogin;
+export default AshaLogin;

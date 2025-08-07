@@ -2,44 +2,50 @@ import React, { useState } from 'react';
 import { FileText, Download, Share, Eye, Calendar, User, Stethoscope } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { healthRecordsService } from '../../services/healthRecordsService';
-import type { HealthRecord } from '../../lib/supabase';
 
 const HealthRecords = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [healthRecords, setHealthRecords] = useState<HealthRecord[]>([]);
-  const [healthSummary, setHealthSummary] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load health records on component mount
-  React.useEffect(() => {
-    loadHealthData();
-  }, [selectedCategory]);
+  const categories = [
+    { id: 'all', name: 'All Records' },
+    { id: 'ai_diagnosis', name: 'AI Diagnoses' },
+    { id: 'prescription', name: 'Prescriptions' },
+    { id: 'follow_up', name: 'Follow-ups' },
+  ];
 
-  const loadHealthData = async () => {
-    setIsLoading(true);
-    try {
-      const userData = localStorage.getItem('user_data');
-      if (userData) {
-        const user = JSON.parse(userData);
-        
-        // Load records with filters
-        const filters = {
-          record_type: selectedCategory,
-          limit: 50
-        };
-        const records = await healthRecordsService.getHealthRecords(user.id, filters);
-        setHealthRecords(records);
-
-        // Load summary
-        const summary = await healthRecordsService.getHealthSummary(user.id);
-        setHealthSummary(summary);
-      }
-    } catch (error) {
-      toast.error('Failed to load health records');
-    } finally {
-      setIsLoading(false);
+  const healthRecords = [
+    {
+      id: 1,
+      type: 'ai_diagnosis',
+      title: 'Anemia Screening',
+      provider: 'ASHA - Priya Patel',
+      date: '2024-01-15',
+      status: 'High Risk',
+      details: 'Hemoglobin: 7.2 g/dL - Requires immediate attention',
+      actions: ['View', 'Download', 'Share']
+    },
+    {
+      id: 2,
+      type: 'prescription',
+      title: 'Iron Supplement Prescription',
+      provider: 'Dr. Rajesh Kumar, PHC Koraput',
+      date: '2024-01-16',
+      status: 'Active',
+      details: 'Iron + Folic Acid tablets - 1 tablet daily for 3 months',
+      actions: ['View', 'Download']
+    },
+    {
+      id: 3,
+      type: 'follow_up',
+      title: 'Follow-up Consultation',
+      provider: 'Dr. Sunita Singh, CHC Jeypore',
+      date: '2024-01-20',
+      status: 'Completed',
+      details: 'Patient showing improvement, continue medication',
+      actions: ['View', 'Download']
     }
-  };
+  ];
 
   const handleExport = async () => {
     try {
@@ -64,57 +70,6 @@ const HealthRecords = () => {
     }
   };
 
-  const categories = [
-    { id: 'all', name: 'All Records' },
-    { id: 'diagnoses', name: 'Diagnoses' },
-    { id: 'prescriptions', name: 'Prescriptions' },
-    { id: 'tests', name: 'Test Reports' },
-    { id: 'visits', name: 'Doctor Visits' },
-  ];
-
-  const healthRecords = [
-    {
-      id: 1,
-      type: 'diagnosis',
-      title: 'Anemia Screening',
-      provider: 'ASHA - Priya Patel',
-      date: '2024-01-15',
-      status: 'High Risk',
-      details: 'Hemoglobin: 7.2 g/dL - Requires immediate attention',
-      actions: ['View', 'Download', 'Share']
-    },
-    {
-      id: 2,
-      type: 'prescription',
-      title: 'Iron Supplement Prescription',
-      provider: 'Dr. Rajesh Kumar, PHC Koraput',
-      date: '2024-01-16',
-      status: 'Active',
-      details: 'Iron + Folic Acid tablets - 1 tablet daily for 3 months',
-      actions: ['View', 'Download']
-    },
-    {
-      id: 3,
-      type: 'test',
-      title: 'Complete Blood Count',
-      provider: 'District Hospital Lab',
-      date: '2024-01-18',
-      status: 'Normal',
-      details: 'All parameters within normal range',
-      actions: ['View', 'Download', 'Share']
-    },
-    {
-      id: 4,
-      type: 'visit',
-      title: 'Follow-up Consultation',
-      provider: 'Dr. Sunita Singh, CHC Jeypore',
-      date: '2024-01-20',
-      status: 'Completed',
-      details: 'Patient showing improvement, continue medication',
-      actions: ['View', 'Download']
-    }
-  ];
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'High Risk': return 'bg-red-100 text-red-800';
@@ -127,10 +82,9 @@ const HealthRecords = () => {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'diagnosis': return Stethoscope;
+      case 'ai_diagnosis': return Stethoscope;
       case 'prescription': return FileText;
-      case 'test': return FileText;
-      case 'visit': return User;
+      case 'follow_up': return User;
       default: return FileText;
     }
   };
@@ -141,15 +95,7 @@ const HealthRecords = () => {
 
   const filteredRecords = selectedCategory === 'all' 
     ? healthRecords 
-    : healthRecords.filter(record => {
-        switch (selectedCategory) {
-          case 'diagnoses': return record.type === 'diagnosis';
-          case 'prescriptions': return record.type === 'prescription';
-          case 'tests': return record.type === 'test';
-          case 'visits': return record.type === 'visit';
-          default: return true;
-        }
-      });
+    : healthRecords.filter(record => record.type === selectedCategory);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -162,7 +108,7 @@ const HealthRecords = () => {
           </div>
           <div className="mt-4 md:mt-0">
             <button
-              onClick={() => toast.success('Downloading complete health summary...')}
+              onClick={handleExport}
               className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Download className="h-4 w-4 mr-2" />
